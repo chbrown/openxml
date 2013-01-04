@@ -10,8 +10,6 @@ except ImportError:
     import Image
 import zipfile
 import shutil
-import re
-import time
 import os
 from os.path import join
 import tempfile
@@ -22,64 +20,68 @@ log = logging.getLogger(__name__)
 
 # Record template directory's location which is just 'template' for a docx
 # developer or 'site-packages/docx-template' if you have installed docx
-template_dir = join(os.path.dirname(__file__),'pptx_template') # installed
+template_dir = join(os.path.dirname(__file__), 'pptx_template')  # installed
 if not os.path.isdir(template_dir):
-    template_dir = join(os.path.dirname(__file__),'pptx_template') # dev
+    template_dir = join(os.path.dirname(__file__), 'pptx_template')  # dev
+
 
 def relationshiplist():
     relationshiplist = [
-    ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme','theme/theme1.xml'],
-    ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster','slideMasters/slideMaster1.xml'],
-    ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide','slides/slide1.xml'],
+        ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme', 'theme/theme1.xml'],
+        ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster', 'slideMasters/slideMaster1.xml'],
+        ['http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide', 'slides/slide1.xml'],
     ]
     return relationshiplist
-    
+
+
 def contenttypes():
     # FIXME - doesn't quite work...read from string as temp hack...
     #types = makeelement('Types',nsprefix='ct')
     types = etree.fromstring('''<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>''')
     parts = {
-        '/_rels/.rels':'application/vnd.openxmlformats-package.relationships+xml',
-        '/ppt/_rels/presentation.xml.rels':'application/vnd.openxmlformats-package.relationships+xml',
+        '/_rels/.rels': 'application/vnd.openxmlformats-package.relationships+xml',
+        '/ppt/_rels/presentation.xml.rels': 'application/vnd.openxmlformats-package.relationships+xml',
         '/ppt/presentation.xml': 'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml',
-        '/ppt/slides/_rels/slide1.xml.rels':'application/vnd.openxmlformats-package.relationships+xml',
+        '/ppt/slides/_rels/slide1.xml.rels': 'application/vnd.openxmlformats-package.relationships+xml',
         '/ppt/slides/slide1.xml': 'application/vnd.openxmlformats-officedocument.presentationml.slide+xml',
         '/ppt/theme/theme1.xml': 'application/vnd.openxmlformats-officedocument.theme+xml',
         '/ppt/slideMasters/slideMaster1.xml': 'application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml',
         '/ppt/slideMasters/_rels/slideMaster1.xml.rels': 'application/vnd.openxmlformats-package.relationships+xml'
-        }
+    }
     for i in range(1, 13):
         path1 = '/ppt/slideLayouts/slideLayout' + str(i) + '.xml'
         path2 = '/ppt/slideLayouts/_rels/slideLayout' + str(i) + '.xml.rels'
         parts[path1] = 'application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml'
         parts[path2] = 'application/vnd.openxmlformats-package.relationships+xml'
-    
+
     for part in parts:
-        types.append(makeelement('Override',nsprefix=None,attributes={'PartName':part,'ContentType':parts[part]}))
+        types.append(makeelement('Override', nsprefix=None, attributes={'PartName': part, 'ContentType': parts[part]}))
     # Add support for filetypes
-    filetypes = {'rels':'application/vnd.openxmlformats-package.relationships+xml','xml':'application/xml','jpeg':'image/jpeg','gif':'image/gif','png':'image/png'}
+    filetypes = {'rels': 'application/vnd.openxmlformats-package.relationships+xml', 'xml': 'application/xml', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'png': 'image/png'}
     for extension in filetypes:
-        types.append(makeelement('Default',nsprefix=None,attributes={'Extension':extension,'ContentType':filetypes[extension]}))
+        types.append(makeelement('Default', nsprefix=None, attributes={'Extension': extension, 'ContentType': filetypes[extension]}))
     return types
-    
+
+
 def pptrelationships(relationshiplist):
     '''Generate a ppt relationships file'''
     # Default list of relationships
     # FIXME: using string hack instead of making element
     #relationships = makeelement('Relationships',nsprefix='pr')
     relationships = etree.fromstring(
-    '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        '''<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
         </Relationships>'''
     )
     count = 0
     for relationship in relationshiplist:
         # Relationship IDs (rId) start at 1.
-        relationships.append(makeelement('Relationship',attributes={'Id':'rId'+str(count+1),
-        'Type':relationship[0],'Target':relationship[1]},nsprefix=None))
+        relationships.append(makeelement('Relationship', attributes={'Id': 'rId' + str(count + 1),
+                                                                     'Type': relationship[0], 'Target': relationship[1]}, nsprefix=None))
         count += 1
     return relationships
 
-def makeelement(tagname,tagtext=None,nsprefix='p',attributes=None,attrnsprefix=None):
+
+def makeelement(tagname, tagtext=None, nsprefix='p', attributes=None, attrnsprefix=None):
     '''Create an element & return it'''
     # Deal with list of nsprefix by making namespacemap
     namespacemap = None
@@ -87,14 +89,14 @@ def makeelement(tagname,tagtext=None,nsprefix='p',attributes=None,attrnsprefix=N
         namespacemap = {}
         for prefix in nsprefix:
             namespacemap[prefix] = nsprefixes[prefix]
-        nsprefix = nsprefix[0] # FIXME: rest of code below expects a single prefix
+        nsprefix = nsprefix[0]  # FIXME: rest of code below expects a single prefix
     elif nsprefix:
         namespacemap = {nsprefix: nsprefixes[nsprefix]}
     else:
         # For when namespace = None
         nsprefix = 'p'
-    namespace = '{'+nsprefixes[nsprefix]+'}'
-    newelement = etree.Element(namespace+tagname, nsmap=namespacemap)
+    namespace = '{' + nsprefixes[nsprefix] + '}'
+    newelement = etree.Element(namespace + tagname, nsmap=namespacemap)
     # Add attributes with namespaces
     if attributes:
         # If they haven't bothered setting attribute namespace, use an empty string
@@ -106,14 +108,15 @@ def makeelement(tagname,tagtext=None,nsprefix='p',attributes=None,attrnsprefix=N
             else:
                 attributenamespace = ''
         else:
-            attributenamespace = '{'+nsprefixes[attrnsprefix]+'}'
+            attributenamespace = '{' + nsprefixes[attrnsprefix] + '}'
 
         for tagattribute in attributes:
-            newelement.set(attributenamespace+tagattribute, attributes[tagattribute])
+            newelement.set(attributenamespace + tagattribute, attributes[tagattribute])
     if tagtext:
         newelement.text = tagtext
     return newelement
-    
+
+
 def picture(picname, slide_rels, picdescription='No Description', pixelwidth=None,
             pixelheight=None, nochangeaspect=True, nochangearrowheads=True,
             template=template_dir, align='center', scale=1):
@@ -123,18 +126,18 @@ def picture(picname, slide_rels, picdescription='No Description', pixelwidth=Non
     # pixel size of image. Return a paragraph containing the picture'''
     # Copy the file into the media dir
 
-    media_dir = join(template,'ppt','media')
+    media_dir = join(template, 'ppt', 'media')
 
     if not os.path.isdir(media_dir):
         os.mkdir(media_dir)
-    new_picname = join(media_dir,os.path.basename(picname))
+    new_picname = join(media_dir, os.path.basename(picname))
     shutil.copyfile(picname, new_picname)
     picname = new_picname
-    
+
     # Check if the user has specified a size
     if not pixelwidth or not pixelheight:
         # If not, get info from the picture itself
-        pixelwidth,pixelheight = Image.open(picname).size[0:2]
+        pixelwidth, pixelheight = Image.open(picname).size[0:2]
     picname = os.path.basename(picname)
     # OpenXML measures on-screen objects in English Metric Units
     # 1cm = 36000 EMUs
@@ -143,16 +146,16 @@ def picture(picname, slide_rels, picdescription='No Description', pixelwidth=Non
     height = str(int(pixelheight * emuperpixel * scale))
 
     # Set relationship ID to the first available
-    picid = len(slide_rels) + 1 
-    picrelid = 'rId'+ str(picid)
+    picid = len(slide_rels) + 1
+    picrelid = 'rId' + str(picid)
     slide_rels.append([nsprefixes['i'], '../media/' + picname, str(picid)])
 
     # There are 3 main elements inside a picture
     # 1. The Blipfill - specifies how the image fills the picture area (stretch, tile, etc.)
     blipfill = makeelement('blipFill')
-    blipfill.append(makeelement('blip',nsprefix='a',attrnsprefix='r',attributes={'embed':picrelid}))
-    stretch = makeelement('stretch',nsprefix='a')
-    stretch.append(makeelement('fillRect',nsprefix='a'))
+    blipfill.append(makeelement('blip', nsprefix='a', attrnsprefix='r', attributes={'embed': picrelid}))
+    stretch = makeelement('stretch', nsprefix='a')
+    stretch.append(makeelement('fillRect', nsprefix='a'))
     blipfill.append(stretch)
 
     # 2. The non visual picture properties
@@ -166,11 +169,11 @@ def picture(picname, slide_rels, picdescription='No Description', pixelwidth=Non
 
     # 3. The Shape properties
     sppr = makeelement('spPr')
-    xfrm = makeelement('xfrm',nsprefix='a')
-    xfrm.append(makeelement('off',nsprefix='a',attributes={'x':'1405440','y':'1820520'}))
-    xfrm.append(makeelement('ext',nsprefix='a',attributes={'cx':width,'cy':height}))
-    prstgeom = makeelement('prstGeom',nsprefix='a',attributes={'prst':'rect'})
-    prstgeom.append(makeelement('avLst',nsprefix='a'))
+    xfrm = makeelement('xfrm', nsprefix='a')
+    xfrm.append(makeelement('off', nsprefix='a', attributes={'x': '1405440', 'y': '1820520'}))
+    xfrm.append(makeelement('ext', nsprefix='a', attributes={'cx': width, 'cy': height}))
+    prstgeom = makeelement('prstGeom', nsprefix='a', attributes={'prst': 'rect'})
+    prstgeom.append(makeelement('avLst', nsprefix='a'))
     sppr.append(xfrm)
     sppr.append(prstgeom)
 
@@ -181,12 +184,13 @@ def picture(picname, slide_rels, picdescription='No Description', pixelwidth=Non
     pic.append(sppr)
 
     return slide_rels, pic
-    
+
+
 def savepptx(document, output, slides, media_files, pptrelationships,
-                                    contenttypes=contenttypes(), template=template_dir):
+             contenttypes=contenttypes(), template=template_dir):
     '''Save a modified document'''
     assert os.path.isdir(template)
-    docxfile = zipfile.ZipFile(output,mode='w',compression=zipfile.ZIP_DEFLATED)
+    docxfile = zipfile.ZipFile(output, mode='w', compression=zipfile.ZIP_DEFLATED)
 
     # Serialize our trees into out zip file
     '''
@@ -213,7 +217,7 @@ def savepptx(document, output, slides, media_files, pptrelationships,
             rels_tree.append(rel_el)
         rels_string = etree.tostring(rels_tree, pretty_print=True)
         docxfile.writestr('ppt/slides/_rels/slide' + str(slide.number) + '.xml.rels',
-                                                                            rels_string)
+                          rels_string)
     # Add & compress support files
     allowed = ['.xml', '.rels']
     for dirpath, dirnames, filenames in os.walk(template):
@@ -221,36 +225,36 @@ def savepptx(document, output, slides, media_files, pptrelationships,
             ext = os.path.splitext(filename)[1]
             if ext in allowed or filename in allowed or filename in media_files:
                 doc_file = os.path.join(dirpath, filename)
-                archivename = doc_file[len(template)+1:]
+                archivename = doc_file[len(template) + 1:]
                 docxfile.write(doc_file, archivename)
     docxfile.close()
-    return
-    
+
+
 def slide():
     sld = makeelement('sld', nsprefix=['p', 'r', 'a'])
     csld = makeelement('cSld')
     sptree = makeelement('spTree')
-    
+
     nvgrpsppr = makeelement('nvGrpSpPr')
-    cnvpr = makeelement('cNvPr', attributes={'id':'1', 'name':''})
+    cnvpr = makeelement('cNvPr', attributes={'id': '1', 'name': ''})
     cnvgrpsppr = makeelement('cNvGrpSpPr')
     nvpr = makeelement('nvPr')
     nvgrpsppr.append(cnvpr)
     nvgrpsppr.append(cnvgrpsppr)
     nvgrpsppr.append(nvpr)
-    
+
     sptree.append(nvgrpsppr)
 
     grpsppr = makeelement('grpSpPr')
-    
+
     xfrm = makeelement('xfrm', nsprefix='a')
-    xfrm.append(makeelement('off', attributes={'x':'0', 'y':'0'}, nsprefix='a'))
-    xfrm.append(makeelement('ext', attributes={'cx':'0', 'cy':'0'}, nsprefix='a'))
-    xfrm.append(makeelement('chOff', attributes={'x':'0', 'y':'0'}, nsprefix='a'))
-    xfrm.append(makeelement('chExt', attributes={'cx':'0', 'cy':'0'}, nsprefix='a'))
-    
+    xfrm.append(makeelement('off', attributes={'x': '0', 'y': '0'}, nsprefix='a'))
+    xfrm.append(makeelement('ext', attributes={'cx': '0', 'cy': '0'}, nsprefix='a'))
+    xfrm.append(makeelement('chOff', attributes={'x': '0', 'y': '0'}, nsprefix='a'))
+    xfrm.append(makeelement('chExt', attributes={'cx': '0', 'cy': '0'}, nsprefix='a'))
+
     grpsppr.append(xfrm)
-    
+
     sptree.append(grpsppr)
     csld.append(sptree)
 
@@ -259,6 +263,7 @@ def slide():
     clrmapovr.append(makeelement('masterClrMapping', nsprefix='a'))
     sld.append(clrmapovr)
     return sld
+
 
 def text_box(text):
     sp = makeelement('sp')
@@ -271,7 +276,7 @@ def text_box(text):
     sppr = makeelement('spPr')
 
     xfrm = makeelement('xfrm', nsprefix='a')
-    xfrm.append(makeelement('off', nsprefix='a', attributes={'x': '0', 'y': '332656'})) 
+    xfrm.append(makeelement('off', nsprefix='a', attributes={'x': '0', 'y': '332656'}))
     xfrm.append(makeelement('ext', nsprefix='a', attributes={'cx': '9144000', 'cy': '1262160'}))
     sppr.append(xfrm)
 
@@ -287,20 +292,21 @@ def text_box(text):
     p.append(makeelement('pPr', nsprefix='a', attributes={'algn': 'ctr'}))
     r = makeelement('r', nsprefix='a')
     r.append(makeelement('rPr', nsprefix='a', attributes={'lang': 'en-GB'}))
-    r.append(makeelement('t', nsprefix='a', tagtext=text)) # this is where the text goes.
+    r.append(makeelement('t', nsprefix='a', tagtext=text))  # this is where the text goes.
     p.append(r)
     p.append(makeelement('endParaRPr', nsprefix='a'))
     txbody.append(p)
-    
+
     sp.append(txbody)
     return sp
+
 
 class Slide(object):
     def __init__(self):
         self.slide = slide()
         self.relationships = [
-                [nsprefixes['sl'], '../slideLayouts/slideLayout2.xml', '1']
-                ]
+            [nsprefixes['sl'], '../slideLayouts/slideLayout2.xml', '1']
+        ]
         self.number = None
         self.media_files = []
         return
@@ -316,37 +322,36 @@ class Slide(object):
         if extension not in ['.jpg', '.jpeg', '.png']:
             raise ValueError
         self.relationships, pic = picture(picname, slide_rels=self.relationships,
-                                        template=self.template_dir, *args, **kwargs)
+                                          template=self.template_dir, *args, **kwargs)
         self.slide.xpath('/p:sld/p:cSld/p:spTree', namespaces=nsprefixes)[0].append(pic)
         self.media_files.append(os.path.basename(picname))
-        return
 
     def add_text_box(self, text):
         self.slide.xpath('/p:sld/p:cSld/p:spTree', namespaces=nsprefixes)[0].append(
-                                                                          text_box(text))
-        return
+            text_box(text))
+
 
 class Document(object):
     def __init__(self):
         self.relationshiplist = relationshiplist()
-        self.slide_rels = [] # Each member of this list will be a list of relationships for a particular slide. Each relationship is itself a list, whose first member is the Type of the relationship (a namespace) and whose second member is the Target for the relationship.
+        self.slide_rels = []  # Each member of this list will be a list of relationships for a particular slide. Each relationship is itself a list, whose first member is the Type of the relationship (a namespace) and whose second member is the Target for the relationship.
         self.tmpdir = tempfile.mkdtemp()
         self.template_dir = os.path.join(self.tmpdir, 'template')
-        shutil.copytree(template_dir, self.template_dir) # we copy our template files to a temp location
+        shutil.copytree(template_dir, self.template_dir)  # we copy our template files to a temp location
         return
-    
+
     @classmethod
     def create(cls):
         doc = cls()
         doc.presentation = makeelement('presentation')
         master_id_list = makeelement('sldMasterIdLst')
-        master_id_list.append(makeelement('sldMasterId', attributes={'id': '2147483648',                                                '{'+nsprefixes['r']+'}' + 'id':'rId2'}))
+        master_id_list.append(makeelement('sldMasterId', attributes={'id': '2147483648', '{' + nsprefixes['r'] + '}' + 'id': 'rId2'}))
         doc.presentation.append(master_id_list)
         doc.presentation.append(makeelement('sldIdLst'))
-        doc.presentation.append(makeelement('sldSz', attributes={'cx':'10080625',
-                                                                 'cy':'7559675'}))
-        doc.presentation.append(makeelement('notesSz', attributes={'cx':'7559675',
-                                                                   'cy':'10691812'})) 
+        doc.presentation.append(makeelement('sldSz', attributes={'cx': '10080625',
+                                                                 'cy': '7559675'}))
+        doc.presentation.append(makeelement('notesSz', attributes={'cx': '7559675',
+                                                                   'cy': '10691812'}))
         doc.slides = []
         return doc
 
@@ -355,10 +360,10 @@ class Document(object):
         slide.number = len(self.slides) + 1
         self.slides.append(slide)
         slide_list = self.presentation.xpath('/p:presentation/p:sldIdLst',
-                                                                namespaces=nsprefixes)[0]
+                                             namespaces=nsprefixes)[0]
         slide_list.append(makeelement('sldId',
-            attributes={'id': str(256 + len(self.slides) - 1),
-               '{'+nsprefixes['r']+'}' + 'id': 'rId' + str(3 + len(self.slides) - 1)}))
+                                      attributes={'id': str(256 + len(self.slides) - 1),
+                                                  '{' + nsprefixes['r'] + '}' + 'id': 'rId' + str(3 + len(self.slides) - 1)}))
         return slide
 
     def save(self, filename, *args, **kwargs):
@@ -381,9 +386,9 @@ class Document(object):
         f = open(filepath)
         shutil.rmtree(filedir)
         return f
-        
+
     def get_as_string(self, *args, **kwargs):
         return self.get_file_object(*args, **kwargs).read()
- 
+
     def close(self):
         shutil.rmtree(self.tmpdir)
