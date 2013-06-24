@@ -1,16 +1,14 @@
 # openxml
 
+Forked from [timetric/python-openxml](https://github.com/timetric/python-openxml).
+
 openxml is a Python library to create and manipulate .docx and .pptx files.
 
-The code draws heavily on the python-docx library created by Mike McCana at https://github.com/mikemaccana/python-docx/
+The code draws heavily on Mike McCana's [python-docx library](https://github.com/mikemaccana/python-docx/).
 
-openxml was written to support the Timetric data visualization platform (http://timetric.com)
+openxml was written to support the [Timetric](http://timetric.com) data visualization platform.
 
-For queries, please email Tom Scrace <tom.scrace@timetric.com>
-
-Copyright Timetric Ltd., 2012.
-
----
+# Word Usage
 
 To create a .docx file, suitable for use with Microsoft Word, do the following:
 
@@ -23,7 +21,7 @@ To create a .docx file, suitable for use with Microsoft Word, do the following:
 
 See the source code in docx.py for further details.
 
----
+# Powerpoint Usage
 
 To create a .pptx file, suitable for use with Microsoft Powerpoint, do the following:
 
@@ -36,3 +34,9 @@ To create a .pptx file, suitable for use with Microsoft Powerpoint, do the follo
     d.save('document.pptx')
 
 See the source code in pptx.py for further details.
+
+# License
+
+Portions Copyright Mike McCana (MIT Licensed)
+Copyright Timetric Ltd., 2012. (No license specified)
+Copyright Christopher Brown, 2013 (MIT Licensed)
